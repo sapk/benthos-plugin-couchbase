@@ -142,9 +142,7 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 
 	proc := &couchbaseProcessor{
 		cluster: cluster,
-		//collection: cluster.Bucket(bucket).Collection(collection),
-		logger: mgr.Logger(),
-		//metrics: mgr.Metrics(),
+		logger:  mgr.Logger(),
 	}
 
 	if conf.Contains("key") {
