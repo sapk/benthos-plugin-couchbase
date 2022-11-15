@@ -7,13 +7,14 @@ input:
 
 pipeline:
   processors:
-  - couchbase:
-      server: couchbase://localhost:11210
-      username: Administrator
-      password: "123456"
-      bucket: testing
-      timeout: 3s
-      operation: "remove"
+  - try:
+    - couchbase:
+        server: couchbase://localhost:11210
+        username: Administrator
+        password: "123456"
+        bucket: testing
+        timeout: 3s
+        operation: "remove"
   - catch:
     - mapping: |
           root.error = error()
@@ -24,8 +25,6 @@ pipeline:
           } else {
             500
           }
-# add switch error cases
-    - sync_response: {}
 
 output:
   sync_response: {}

@@ -23,8 +23,8 @@ func init() {
 	).
 		Categories("Integration").
 		Field(service.NewStringField("server")).
-		Field(service.NewStringField("username")).
-		Field(service.NewStringField("password")).
+		Field(service.NewStringField("username").Optional()).
+		Field(service.NewStringField("password").Optional()).
 		Field(service.NewStringField("bucket")).
 		Field(service.NewStringField("collection").Default("_default").Advanced().Optional()).
 		Field(service.NewInterpolatedStringField("key").Default(`${! content() }`)).
@@ -65,14 +65,6 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 	if err != nil {
 		return nil, err
 	}
-	username, err := conf.FieldString("username")
-	if err != nil {
-		return nil, err
-	}
-	password, err := conf.FieldString("password")
-	if err != nil {
-		return nil, err
-	}
 	bucket, err := conf.FieldString("bucket")
 	if err != nil {
 		return nil, err
@@ -84,10 +76,6 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 
 	// setup couchbase
 	opts := gocb.ClusterOptions{
-		Authenticator: gocb.PasswordAuthenticator{
-			Username: username,
-			Password: password,
-		},
 		// TODO add more configuration
 		// TODO Tracer:   mgr.OtelTracer().Tracer(name).Start(context.Background(), operationName)
 		// TODO Meter:    mgr.Metrics(),
@@ -103,6 +91,21 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 			AnalyticsTimeout:  timeout,
 			SearchTimeout:     timeout,
 			ManagementTimeout: timeout,
+		}
+	}
+
+	if conf.Contains("username") {
+		username, err := conf.FieldString("username")
+		if err != nil {
+			return nil, err
+		}
+		password, err := conf.FieldString("password")
+		if err != nil {
+			return nil, err
+		}
+		opts.Authenticator = gocb.PasswordAuthenticator{
+			Username: username,
+			Password: password,
 		}
 	}
 
