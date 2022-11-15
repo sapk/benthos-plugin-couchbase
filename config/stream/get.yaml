@@ -1,0 +1,30 @@
+input:
+  http_server:
+    path: /
+    ws_path: ""
+    sync_response:
+      status: ${! meta("status").or(200) }
+
+pipeline:
+  processors:
+  - couchbase:
+      server: couchbase://localhost:11210
+      username: Administrator
+      password: "123456"
+      bucket: testing
+      timeout: 3s
+  - catch:
+    - mapping: |
+          root.error = error()
+          meta status = if error().contains("KEY_ENOENT")  {
+            404
+          } else if error().contains("EINVAL") {
+            400
+          } else {
+            500
+          }
+# add switch error cases
+    - sync_response: {}
+
+output:
+  sync_response: {}

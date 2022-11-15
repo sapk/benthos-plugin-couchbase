@@ -1,0 +1,32 @@
+name: Testing
+
+on: [push]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          args: --timeout=5m
+
+      - name: Test
+        run: go test -v ./...
+
+      - name: Build
+        run: go build -o ./ -v ./...
+        
+#      - name: Configuration
+#        run: ./benthos test ./config/test/*.yaml
