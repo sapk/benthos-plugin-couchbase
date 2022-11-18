@@ -18,10 +18,8 @@ pipeline:
   - catch:
     - mapping: |
           root.error = error()
-          meta status = if error().contains("KEY_ENOENT")  {
+          meta status = if error().contains("key not found")  {
             404
-          } else if error().contains("EINVAL") {
-            400
           } else {
             500
           }

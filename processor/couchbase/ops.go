@@ -1,23 +1,22 @@
 package couchbase
 
-import "github.com/couchbase/gocb/v2"
+import "gopkg.in/couchbase/gocb.v1"
 
-func get(collection *gocb.Collection) func(key string, data []byte) ([]byte, error) {
+func get(bucket *gocb.Bucket) func(key string, data []byte) ([]byte, error) {
 	return func(key string, data []byte) ([]byte, error) {
-		res, err := collection.Get(key, nil)
+		var out []byte
+		_, err := bucket.Get(key, &out)
 		if err != nil {
 			return nil, err
 		}
 
-		var out []byte
-		err = res.Content(&out)
 		return out, err
 	}
 }
 
-func insert(collection *gocb.Collection) func(key string, data []byte) ([]byte, error) {
+func insert(bucket *gocb.Bucket) func(key string, data []byte) ([]byte, error) {
 	return func(key string, data []byte) ([]byte, error) {
-		_, err := collection.Insert(key, data, nil)
+		_, err := bucket.Insert(key, data, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -26,9 +25,9 @@ func insert(collection *gocb.Collection) func(key string, data []byte) ([]byte, 
 	}
 }
 
-func remove(collection *gocb.Collection) func(key string, data []byte) ([]byte, error) {
+func remove(bucket *gocb.Bucket) func(key string, data []byte) ([]byte, error) {
 	return func(key string, data []byte) ([]byte, error) {
-		_, err := collection.Remove(key, nil)
+		_, err := bucket.Remove(key, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -37,9 +36,9 @@ func remove(collection *gocb.Collection) func(key string, data []byte) ([]byte, 
 	}
 }
 
-func replace(collection *gocb.Collection) func(key string, data []byte) ([]byte, error) {
+func replace(bucket *gocb.Bucket) func(key string, data []byte) ([]byte, error) {
 	return func(key string, data []byte) ([]byte, error) {
-		_, err := collection.Replace(key, data, nil)
+		_, err := bucket.Replace(key, data, 0, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -48,9 +47,9 @@ func replace(collection *gocb.Collection) func(key string, data []byte) ([]byte,
 	}
 }
 
-func upsert(collection *gocb.Collection) func(key string, data []byte) ([]byte, error) {
+func upsert(bucket *gocb.Bucket) func(key string, data []byte) ([]byte, error) {
 	return func(key string, data []byte) ([]byte, error) {
-		_, err := collection.Upsert(key, data, nil)
+		_, err := bucket.Upsert(key, data, 0)
 		if err != nil {
 			return nil, err
 		}

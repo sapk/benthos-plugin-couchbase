@@ -7,7 +7,7 @@ import (
 
 	"github.com/benthosdev/benthos/v4/public/bloblang"
 	"github.com/benthosdev/benthos/v4/public/service"
-	"github.com/couchbase/gocb/v2"
+	"gopkg.in/couchbase/gocb.v1"
 )
 
 var (
@@ -49,6 +49,7 @@ func init() {
 
 type couchbaseProcessor struct {
 	cluster *gocb.Cluster
+	bucket  *gocb.Bucket
 	logger  *service.Logger
 	//metrics *service.Metrics
 	key   *service.InterpolatedString
@@ -75,25 +76,21 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 	}
 
 	// setup couchbase
-	opts := gocb.ClusterOptions{
-		// TODO add more configuration
-		// TODO Tracer:   mgr.OtelTracer().Tracer(name).Start(context.Background(), operationName)
-		// TODO Meter:    mgr.Metrics(),
+	cluster, err := gocb.Connect(server)
+	if err != nil {
+		return nil, err
 	}
 
 	if conf.Contains("timeout") {
-		opts.TimeoutsConfig = gocb.TimeoutsConfig{
-			ConnectTimeout:    timeout,
-			KVTimeout:         timeout,
-			KVDurableTimeout:  timeout,
-			ViewTimeout:       timeout,
-			QueryTimeout:      timeout,
-			AnalyticsTimeout:  timeout,
-			SearchTimeout:     timeout,
-			ManagementTimeout: timeout,
-		}
+		cluster.SetAnalyticsTimeout(timeout)
+		cluster.SetConnectTimeout(timeout)
+		cluster.SetFtsTimeout(timeout)
+		cluster.SetN1qlTimeout(timeout)
+		cluster.SetNmvRetryDelay(timeout)
+		cluster.SetServerConnectTimeout(timeout)
 	}
 
+	// Auth
 	if conf.Contains("username") {
 		username, err := conf.FieldString("username")
 		if err != nil {
@@ -103,49 +100,51 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 		if err != nil {
 			return nil, err
 		}
-		opts.Authenticator = gocb.PasswordAuthenticator{
+		auth := gocb.PasswordAuthenticator{
 			Username: username,
 			Password: password,
 		}
-	}
-
-	if conf.Contains("transcoder") {
-		tr, err := conf.FieldString("transcoder")
+		err = cluster.Authenticate(auth)
 		if err != nil {
 			return nil, err
 		}
-		switch tr {
-		case "json":
-			opts.Transcoder = gocb.NewJSONTranscoder() // maybe not supported
-		case "raw":
+	}
+
+	/*
+		if conf.Contains("transcoder") {
+			tr, err := conf.FieldString("transcoder")
+			if err != nil {
+				return nil, err
+			}
+			switch tr {
+			case "json":
+				opts.Transcoder = gocb.NewJSONTranscoder() // maybe not supported
+			case "raw":
+				opts.Transcoder = gocb.NewRawBinaryTranscoder()
+			case "rawjson":
+				opts.Transcoder = gocb.NewRawJSONTranscoder()
+			case "rawstring":
+				opts.Transcoder = gocb.NewRawStringTranscoder()
+			case "legacy":
+				opts.Transcoder = gocb.NewLegacyTranscoder()
+			default:
+				return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
+			}
+		} else {
 			opts.Transcoder = gocb.NewRawBinaryTranscoder()
-		case "rawjson":
-			opts.Transcoder = gocb.NewRawJSONTranscoder()
-		case "rawstring":
-			opts.Transcoder = gocb.NewRawStringTranscoder()
-		case "legacy":
-			opts.Transcoder = gocb.NewLegacyTranscoder()
-		default:
-			return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
 		}
-	} else {
-		opts.Transcoder = gocb.NewRawBinaryTranscoder()
-	}
 
-	cluster, err := gocb.Connect(server, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	// check that we can do query
-	err = cluster.Bucket(bucket).WaitUntilReady(timeout, nil)
-	if err != nil {
-		return nil, err
-	}
+	*/
 
 	proc := &couchbaseProcessor{
 		cluster: cluster,
 		logger:  mgr.Logger(),
+	}
+
+	// open bucket
+	proc.bucket, err = cluster.OpenBucket(bucket, "") // TODO add bucket auth ?
+	if err != nil {
+		return nil, err
 	}
 
 	if conf.Contains("key") {
@@ -160,18 +159,6 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 		}
 	}
 
-	// retrieve collection
-	var collection *gocb.Collection
-	if conf.Contains("collection") {
-		collectionStr, err := conf.FieldString("collection")
-		if err != nil {
-			return nil, err
-		}
-		collection = cluster.Bucket(bucket).Collection(collectionStr)
-	} else {
-		collection = cluster.Bucket(bucket).DefaultCollection()
-	}
-
 	if conf.Contains("operation") {
 		op, err := conf.FieldString("operation")
 		if err != nil {
@@ -179,29 +166,29 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 		}
 		switch op {
 		case "get":
-			proc.op = get(collection)
+			proc.op = get(proc.bucket)
 		case "remove":
-			proc.op = remove(collection)
+			proc.op = remove(proc.bucket)
 		case "insert":
 			if proc.value == nil {
 				return nil, ErrValueRequired
 			}
-			proc.op = insert(collection)
+			proc.op = insert(proc.bucket)
 		case "replace":
 			if proc.value == nil {
 				return nil, ErrValueRequired
 			}
-			proc.op = replace(collection)
+			proc.op = replace(proc.bucket)
 		case "upsert":
 			if proc.value == nil {
 				return nil, ErrValueRequired
 			}
-			proc.op = upsert(collection)
+			proc.op = upsert(proc.bucket)
 		default:
 			return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, op)
 		}
 	} else {
-		proc.op = get(collection)
+		proc.op = get(proc.bucket)
 	}
 
 	return proc, nil
@@ -239,5 +226,9 @@ func (p *couchbaseProcessor) Process(ctx context.Context, m *service.Message) (s
 }
 
 func (p *couchbaseProcessor) Close(ctx context.Context) error {
-	return p.cluster.Close(&gocb.ClusterCloseOptions{})
+	if err := p.bucket.Close(); err != nil {
+		return err
+	}
+
+	return p.cluster.Close()
 }
