@@ -236,7 +236,7 @@ func (p *couchbaseProcessor) Process(ctx context.Context, m *service.Message) (s
 
 	if data, ok := out.([]byte); ok {
 		m.SetBytes(data)
-	} else {
+	} else if out != nil {
 		m.SetStructured(out)
 	}
 
