@@ -11,9 +11,9 @@ import (
 )
 
 var (
-	ErrInvalidOperation  = errors.New("invalid operation")
-	ErrInvalidTranscoder = errors.New("invalid transcoder")
-	ErrValueRequired     = errors.New("value required")
+	ErrInvalidOperation = errors.New("invalid operation")
+	ErrValueRequired    = errors.New("value required")
+	// ErrInvalidTranscoder = errors.New("invalid transcoder")
 )
 
 func init() {
@@ -30,7 +30,7 @@ func init() {
 		Field(service.NewInterpolatedStringField("key").Default(`${! content() }`)).
 		Field(service.NewBloblangField("value").Optional()).
 		Field(service.NewStringEnumField("operation", "get", "insert", "remove", "replace", "upsert" /* add more , "exist" */).Default("get")).
-		Field(service.NewStringEnumField("transcoder", "raw", "rawjson", "rawstring", "json", "legacy" /* add more , "exist" */).Default("raw").Advanced()).
+		// Field(service.NewStringEnumField("transcoder", "raw", "rawjson", "rawstring", "json", "legacy" /* add more , "exist" */).Default("raw").Advanced()).
 		Field(service.NewDurationField("timeout").Advanced().Optional())
 
 	// TODO add retry, more timeout configuration ...
@@ -110,31 +110,7 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 		}
 	}
 
-	/*
-		if conf.Contains("transcoder") {
-			tr, err := conf.FieldString("transcoder")
-			if err != nil {
-				return nil, err
-			}
-			switch tr {
-			case "json":
-				opts.Transcoder = gocb.NewJSONTranscoder() // maybe not supported
-			case "raw":
-				opts.Transcoder = gocb.NewRawBinaryTranscoder()
-			case "rawjson":
-				opts.Transcoder = gocb.NewRawJSONTranscoder()
-			case "rawstring":
-				opts.Transcoder = gocb.NewRawStringTranscoder()
-			case "legacy":
-				opts.Transcoder = gocb.NewLegacyTranscoder()
-			default:
-				return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
-			}
-		} else {
-			opts.Transcoder = gocb.NewRawBinaryTranscoder()
-		}
-
-	*/
+	//cluster.SetTracer(mgr.OtelTracer())
 
 	proc := &couchbaseProcessor{
 		cluster: cluster,
@@ -146,6 +122,31 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 	if err != nil {
 		return nil, err
 	}
+
+	/*
+		if conf.Contains("transcoder") {
+			tr, err := conf.FieldString("transcoder")
+			if err != nil {
+				return nil, err
+			}
+			switch tr {
+			case "json":
+				proc.bucket.SetTranscoder(gocb.JSONTranscoder{})
+			case "raw":
+				proc.bucket.SetTranscoder(gocb.RawBinaryTranscoder{})
+			case "rawjson":
+				proc.bucket.SetTranscoder(gocb.RawJSONTranscoder{})
+			case "rawstring":
+				proc.bucket.SetTranscoder(gocb.RawStringTranscoder{})
+			case "legacy":
+				proc.bucket.SetTranscoder(gocb.LegacyTranscoder{})
+			default:
+				return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
+			}
+		} else {
+			proc.bucket.SetTranscoder(gocb.DefaultTranscoder{})
+		}
+	*/
 
 	if conf.Contains("key") {
 		if proc.key, err = conf.FieldInterpolatedString("key"); err != nil {
