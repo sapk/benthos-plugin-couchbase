@@ -9,7 +9,7 @@ import (
 	_ "github.com/benthosdev/benthos/v4/public/components/all"
 
 	// Add your plugin packages here
-	_ "github.com/sapk/benthos-plugin-couchbase/v1/processor/couchbase"
+	_ "github.com/sapk/benthos-plugin-couchbase/processor/couchbase"
 )
 
 func main() {
