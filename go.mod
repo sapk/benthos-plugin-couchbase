@@ -1,4 +1,4 @@
-module github.com/sapk/benthos-plugin-couchbase
+module github.com/sapk/benthos-plugin-couchbase/v2
 
 go 1.19
 
