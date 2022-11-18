@@ -53,7 +53,7 @@ type couchbaseProcessor struct {
 	//metrics *service.Metrics
 	key   *service.InterpolatedString
 	value *bloblang.Executor
-	op    func(key string, data []byte) ([]byte, error)
+	op    func(key string, data []byte) (any, error)
 }
 
 func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcessor, error) {
@@ -227,14 +227,19 @@ func (p *couchbaseProcessor) Process(ctx context.Context, m *service.Message) (s
 
 	// p.logger.With("key", k).Debugf("query")
 
-	newBytes, err := p.op(k, content)
+	out, err := p.op(k, content)
 	if err != nil {
 		return nil, err
 	}
 
 	// p.logger.With("key", k).Debugf("result: %s", string(newBytes))
 
-	m.SetBytes(newBytes)
+	if data, ok := out.([]byte); ok {
+		m.SetBytes(data)
+	} else {
+		m.SetStructured(out)
+	}
+
 	return []*service.Message{m}, nil
 }
 
