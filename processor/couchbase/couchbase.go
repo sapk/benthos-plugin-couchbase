@@ -13,7 +13,6 @@ import (
 var (
 	ErrInvalidOperation = errors.New("invalid operation")
 	ErrValueRequired    = errors.New("value required")
-	// ErrInvalidTranscoder = errors.New("invalid transcoder")
 )
 
 func init() {
@@ -30,7 +29,6 @@ func init() {
 		Field(service.NewInterpolatedStringField("key").Default(`${! content() }`)).
 		Field(service.NewBloblangField("value").Optional()).
 		Field(service.NewStringEnumField("operation", "get", "insert", "remove", "replace", "upsert" /* add more , "exist" */).Default("get")).
-		// Field(service.NewStringEnumField("transcoder", "raw", "rawjson", "rawstring", "json", "legacy" /* add more , "exist" */).Default("raw").Advanced()).
 		Field(service.NewDurationField("timeout").Advanced().Optional())
 
 	// TODO add retry, more timeout configuration ...
@@ -54,7 +52,7 @@ type couchbaseProcessor struct {
 	//metrics *service.Metrics
 	key   *service.InterpolatedString
 	value *bloblang.Executor
-	op    func(key string, data []byte) ([]byte, error)
+	op    func(key string, data []byte) (any, error)
 }
 
 func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcessor, error) {
@@ -123,31 +121,6 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 		return nil, err
 	}
 
-	/*
-		if conf.Contains("transcoder") {
-			tr, err := conf.FieldString("transcoder")
-			if err != nil {
-				return nil, err
-			}
-			switch tr {
-			case "json":
-				proc.bucket.SetTranscoder(gocb.JSONTranscoder{})
-			case "raw":
-				proc.bucket.SetTranscoder(gocb.RawBinaryTranscoder{})
-			case "rawjson":
-				proc.bucket.SetTranscoder(gocb.RawJSONTranscoder{})
-			case "rawstring":
-				proc.bucket.SetTranscoder(gocb.RawStringTranscoder{})
-			case "legacy":
-				proc.bucket.SetTranscoder(gocb.LegacyTranscoder{})
-			default:
-				return nil, fmt.Errorf("%w: %s", ErrInvalidTranscoder, tr)
-			}
-		} else {
-			proc.bucket.SetTranscoder(gocb.DefaultTranscoder{})
-		}
-	*/
-
 	if conf.Contains("key") {
 		if proc.key, err = conf.FieldInterpolatedString("key"); err != nil {
 			return nil, err
@@ -215,14 +188,19 @@ func (p *couchbaseProcessor) Process(ctx context.Context, m *service.Message) (s
 
 	// p.logger.With("key", k).Debugf("query")
 
-	newBytes, err := p.op(k, content)
+	out, err := p.op(k, content)
 	if err != nil {
 		return nil, err
 	}
 
 	// p.logger.With("key", k).Debugf("result: %s", string(newBytes))
 
-	m.SetBytes(newBytes)
+	if data, ok := out.([]byte); ok {
+		m.SetBytes(data)
+	} else {
+		m.SetStructured(out)
+	}
+
 	return []*service.Message{m}, nil
 }
 
