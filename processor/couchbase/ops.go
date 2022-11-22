@@ -1,59 +1,76 @@
 package couchbase
 
-import "gopkg.in/couchbase/gocb.v1"
+import (
+	"fmt"
 
-func get(bucket *gocb.Bucket) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		var out any
-		_, err := bucket.Get(key, &out)
-		if err != nil {
-			return nil, err
-		}
+	"gopkg.in/couchbase/gocb.v1"
+)
 
-		return out, err
+func errorFromOp(op gocb.BulkOp) error {
+	switch o := op.(type) {
+	case *gocb.GetOp:
+		return o.Err
+	case *gocb.InsertOp:
+		return o.Err
+	case *gocb.RemoveOp:
+		return o.Err
+	case *gocb.ReplaceOp:
+		return o.Err
+	case *gocb.UpsertOp:
+		return o.Err
+	}
+
+	return fmt.Errorf("type not supported")
+}
+
+func valueFromOp(op gocb.BulkOp) any {
+	switch o := op.(type) {
+	case *gocb.GetOp:
+		return *o.Value.(*any)
+	case *gocb.InsertOp:
+		return *o.Value.(*any)
+	case *gocb.RemoveOp:
+		return nil
+	case *gocb.ReplaceOp:
+		return *o.Value.(*any)
+	case *gocb.UpsertOp:
+		return *o.Value.(*any)
+	}
+
+	return fmt.Errorf("type not supported")
+}
+
+func get(key string, _ []byte) gocb.BulkOp {
+	var out any
+	return &gocb.GetOp{
+		Key:   key,
+		Value: &out,
 	}
 }
 
-func insert(bucket *gocb.Bucket) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := bucket.Insert(key, data, 0)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func insert(key string, data []byte) gocb.BulkOp {
+	return &gocb.InsertOp{
+		Key:   key,
+		Value: data,
 	}
 }
 
-func remove(bucket *gocb.Bucket) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := bucket.Remove(key, 0)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func remove(key string, _ []byte) gocb.BulkOp {
+	return &gocb.RemoveOp{
+		Key: key,
 	}
 }
 
-func replace(bucket *gocb.Bucket) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := bucket.Replace(key, data, 0, 0)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func replace(key string, data []byte) gocb.BulkOp {
+	return &gocb.ReplaceOp{
+		Key:   key,
+		Value: data,
 	}
 }
 
-func upsert(bucket *gocb.Bucket) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := bucket.Upsert(key, data, 0)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func upsert(key string, data []byte) gocb.BulkOp {
+	return &gocb.UpsertOp{
+		Key:   key,
+		Value: data,
 	}
 }
