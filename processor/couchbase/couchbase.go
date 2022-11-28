@@ -35,8 +35,8 @@ func init() {
 
 	// TODO add retry, more timeout configuration ...
 
-	err := service.RegisterProcessor("couchbase", configSpec,
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Processor, error) {
+	err := service.RegisterBatchProcessor("couchbase", configSpec,
+		func(conf *service.ParsedConfig, mgr *service.Resources) (service.BatchProcessor, error) {
 			return new(conf, mgr)
 		},
 	)
@@ -48,12 +48,13 @@ func init() {
 //------------------------------------------------------------------------------
 
 type couchbaseProcessor struct {
-	cluster *gocb.Cluster
-	logger  *service.Logger
+	collection *gocb.Collection
+	cluster    *gocb.Cluster
+	logger     *service.Logger
 	//metrics *service.Metrics
 	key   *service.InterpolatedString
 	value *bloblang.Executor
-	op    func(key string, data []byte) (any, error)
+	op    func(key string, data []byte) gocb.BulkOp
 }
 
 func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcessor, error) {
@@ -161,15 +162,14 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 	}
 
 	// retrieve collection
-	var collection *gocb.Collection
 	if conf.Contains("collection") {
 		collectionStr, err := conf.FieldString("collection")
 		if err != nil {
 			return nil, err
 		}
-		collection = cluster.Bucket(bucket).Collection(collectionStr)
+		proc.collection = cluster.Bucket(bucket).Collection(collectionStr)
 	} else {
-		collection = cluster.Bucket(bucket).DefaultCollection()
+		proc.collection = cluster.Bucket(bucket).DefaultCollection()
 	}
 
 	if conf.Contains("operation") {
@@ -179,68 +179,80 @@ func new(conf *service.ParsedConfig, mgr *service.Resources) (*couchbaseProcesso
 		}
 		switch op {
 		case "get":
-			proc.op = get(collection)
+			proc.op = get
 		case "remove":
-			proc.op = remove(collection)
+			proc.op = remove
 		case "insert":
 			if proc.value == nil {
 				return nil, ErrValueRequired
 			}
-			proc.op = insert(collection)
+			proc.op = insert
 		case "replace":
 			if proc.value == nil {
 				return nil, ErrValueRequired
 			}
-			proc.op = replace(collection)
+			proc.op = replace
 		case "upsert":
 			if proc.value == nil {
 				return nil, ErrValueRequired
 			}
-			proc.op = upsert(collection)
+			proc.op = upsert
 		default:
 			return nil, fmt.Errorf("%w: %s", ErrInvalidOperation, op)
 		}
 	} else {
-		proc.op = get(collection)
+		proc.op = get
 	}
 
 	return proc, nil
 }
 
-// TODO implement ProcessBatch ?
+func (p *couchbaseProcessor) ProcessBatch(ctx context.Context, inBatch service.MessageBatch) ([]service.MessageBatch, error) {
+	newMsg := inBatch.Copy()
+	ops := make([]gocb.BulkOp, len(inBatch))
 
-func (p *couchbaseProcessor) Process(ctx context.Context, m *service.Message) (service.MessageBatch, error) {
-	k := p.key.String(m)
+	// generate query
+	for index := range newMsg {
+		// generate key
+		k := inBatch.InterpolatedString(index, p.key)
 
-	var content []byte
-
-	if p.value != nil {
-		res, err := m.BloblangQuery(p.value)
-		if err != nil {
-			return nil, err
+		// generate content
+		var content []byte
+		if p.value != nil {
+			res, err := inBatch.BloblangQuery(index, p.value)
+			if err != nil {
+				return nil, err
+			}
+			content, err = res.AsBytes()
+			if err != nil {
+				return nil, err
+			}
 		}
-		content, err = res.AsBytes()
-		if err != nil {
-			return nil, err
-		}
+
+		ops[index] = p.op(k, content)
 	}
 
-	// p.logger.With("key", k).Debugf("query")
-
-	out, err := p.op(k, content)
+	// execute
+	err := p.collection.Do(ops, &gocb.BulkOpOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	// p.logger.With("key", k).Debugf("result: %s", string(newBytes))
+	// set results
+	for index, part := range newMsg {
+		out, err := valueFromOp(ops[index])
+		if err != nil {
+			part.SetError(fmt.Errorf("couchbase operator failed: %w", err))
+		}
 
-	if data, ok := out.([]byte); ok {
-		m.SetBytes(data)
-	} else if out != nil {
-		m.SetStructured(out)
+		if data, ok := out.([]byte); ok {
+			part.SetBytes(data)
+		} else if out != nil {
+			part.SetStructured(out)
+		}
 	}
 
-	return []*service.Message{m}, nil
+	return []service.MessageBatch{newMsg}, nil
 }
 
 func (p *couchbaseProcessor) Close(ctx context.Context) error {

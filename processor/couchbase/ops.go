@@ -1,60 +1,61 @@
 package couchbase
 
-import "github.com/couchbase/gocb/v2"
+import (
+	"fmt"
 
-func get(collection *gocb.Collection) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		res, err := collection.Get(key, nil)
-		if err != nil {
-			return nil, err
+	"github.com/couchbase/gocb/v2"
+)
+
+func valueFromOp(op gocb.BulkOp) (out any, err error) {
+	switch o := op.(type) {
+	case *gocb.GetOp:
+		if o.Err != nil {
+			return nil, o.Err
 		}
-
-		var out any
-		err = res.Content(&out)
+		err := o.Result.Content(&out)
 		return out, err
+	case *gocb.InsertOp:
+		return nil, o.Err
+	case *gocb.RemoveOp:
+		return nil, o.Err
+	case *gocb.ReplaceOp:
+		return nil, o.Err
+	case *gocb.UpsertOp:
+		return nil, o.Err
+	}
+
+	return nil, fmt.Errorf("type not supported")
+}
+
+func get(key string, _ []byte) gocb.BulkOp {
+	return &gocb.GetOp{
+		ID: key,
 	}
 }
 
-func insert(collection *gocb.Collection) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := collection.Insert(key, data, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func insert(key string, data []byte) gocb.BulkOp {
+	return &gocb.InsertOp{
+		ID:    key,
+		Value: data,
 	}
 }
 
-func remove(collection *gocb.Collection) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := collection.Remove(key, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func remove(key string, _ []byte) gocb.BulkOp {
+	return &gocb.RemoveOp{
+		ID: key,
 	}
 }
 
-func replace(collection *gocb.Collection) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := collection.Replace(key, data, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func replace(key string, data []byte) gocb.BulkOp {
+	return &gocb.ReplaceOp{
+		ID:    key,
+		Value: data,
 	}
 }
 
-func upsert(collection *gocb.Collection) func(key string, data []byte) (any, error) {
-	return func(key string, data []byte) (any, error) {
-		_, err := collection.Upsert(key, data, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		return nil, err
+func upsert(key string, data []byte) gocb.BulkOp {
+	return &gocb.UpsertOp{
+		ID:    key,
+		Value: data,
 	}
 }
