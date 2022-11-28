@@ -201,11 +201,10 @@ func (p *couchbaseProcessor) ProcessBatch(ctx context.Context, inBatch service.M
 
 	// set results
 	for index, part := range newMsg {
-		if err := errorFromOp(ops[index]); err != nil {
+		out, err := valueFromOp(ops[index])
+		if err != nil {
 			part.SetError(fmt.Errorf("couchbase operator failed: %w", err))
 		}
-
-		out := valueFromOp(ops[index])
 
 		if data, ok := out.([]byte); ok {
 			part.SetBytes(data)

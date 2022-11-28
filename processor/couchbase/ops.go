@@ -6,38 +6,24 @@ import (
 	"gopkg.in/couchbase/gocb.v1"
 )
 
-func errorFromOp(op gocb.BulkOp) error {
+func valueFromOp(op gocb.BulkOp) (any, error) {
 	switch o := op.(type) {
 	case *gocb.GetOp:
-		return o.Err
+		if o.Err != nil {
+			return nil, o.Err
+		}
+		return *o.Value.(*any), nil
 	case *gocb.InsertOp:
-		return o.Err
+		return nil, o.Err
 	case *gocb.RemoveOp:
-		return o.Err
+		return nil, o.Err
 	case *gocb.ReplaceOp:
-		return o.Err
+		return nil, o.Err
 	case *gocb.UpsertOp:
-		return o.Err
+		return nil, o.Err
 	}
 
-	return fmt.Errorf("type not supported")
-}
-
-func valueFromOp(op gocb.BulkOp) any {
-	switch o := op.(type) {
-	case *gocb.GetOp:
-		return *o.Value.(*any)
-	case *gocb.InsertOp:
-		return *o.Value.(*any)
-	case *gocb.RemoveOp:
-		return nil
-	case *gocb.ReplaceOp:
-		return *o.Value.(*any)
-	case *gocb.UpsertOp:
-		return *o.Value.(*any)
-	}
-
-	return fmt.Errorf("type not supported")
+	return nil, fmt.Errorf("type not supported")
 }
 
 func get(key string, _ []byte) gocb.BulkOp {
