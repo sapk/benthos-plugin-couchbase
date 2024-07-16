@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/benthosdev/benthos/v4/public/bloblang"
-	"github.com/benthosdev/benthos/v4/public/service"
+	"github.com/redpanda-data/benthos/v4/public/bloblang"
+	"github.com/redpanda-data/benthos/v4/public/service"
 	"gopkg.in/couchbase/gocb.v1"
 )
 

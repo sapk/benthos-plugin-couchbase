@@ -8,9 +8,10 @@ COPY . /build/
 
 RUN go build -tags="timetzdata" -ldflags "-w -s" ./cmd/benthos
 
-FROM jeffail/benthos
+FROM ghcr.io/redpanda-data/connect
 
 LABEL maintainer="Antoine Girard <antoine.girard@sapk.fr>"
+LABEL org.opencontainers.image.source="https://github.com/sapk/benthos-plugin-couchbase"
 
 # replace original benthos binary and configuration
 COPY ./config/couchbase.yaml /benthos.yaml
